@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location":           { "value": "southafricanorth" },
+    "sqlAdminPassword":   { "value": "REPLACE_WITH_STRONG_PASSWORD" },
+    "encryptionKey":      { "value": "zCCSkHsZFM+Xu3zpvnNBC4k4YbLXEky3bwYQuWIqYe4=" },
+    "encryptionIv":       { "value": "tJ2XP0ZUJF+/+GzAQctSvQ==" },
+    "basicAuthPassword":  { "value": "GK@Assessment2026!" }
+  }
+}
