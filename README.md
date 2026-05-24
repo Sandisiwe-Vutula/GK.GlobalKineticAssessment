@@ -1,6 +1,6 @@
 # GlobalKinetic Assessment Solution
 
-> **Stack:** .NET 8 · ASP.NET Core Web API · Entity Framework Core 8 · SQL Server · Redis · Docker · Azure IaC
+> **Stack:** .NET 8 · ASP.NET Core Web API · Entity Framework Core 8 · SQL Server · Redis · Docker · Azure Bicep
 
 ---
 
