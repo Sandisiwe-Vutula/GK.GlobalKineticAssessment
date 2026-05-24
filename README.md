@@ -1,6 +1,6 @@
 # GlobalKinetic Assessment Solution
 
-> **Stack:** .NET 8 · ASP.NET Core Web API · Entity Framework Core 8 · SQL Server · Redis · Docker · Azure Bicep
+> **Stack:** .NET 8 · ASP.NET Core Web API · Entity Framework Core 8 · SQL Server · Redis · Docker · Azure Bicep (IaC)
 
 ---
 
@@ -49,7 +49,7 @@ cd GK.GlobalKineticAssessment
 docker compose up --build
 ```
 
-Wait approximately 60 seconds for SQL Server to initialise, then open:
+Wait for SQL Server to initialise, then open:
 
 | URL | Description |
 |-----|-------------|

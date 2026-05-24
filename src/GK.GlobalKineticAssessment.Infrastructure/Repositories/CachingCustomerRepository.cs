@@ -15,18 +15,21 @@ public sealed class CachingCustomerRepository : ICustomerRepository
     private static readonly JsonSerializerOptions Opts = new() { PropertyNameCaseInsensitive = true };
 
     private static string KeyById(Guid id) => $"gk:cust:{id}";
-    private static string KeyAll()         => "gk:custs:all";
-    private static string KeyPaged(string? f, int p, int s) => $"gk:custs:{f ?? ""}:{p}:{s}";
+    private static string KeyAll() => "gk:custs:all";
+    private static string KeyPaged(string? f, int p, int s) => $"gk:custs:paged:{f ?? ""}:{p}:{s}";
+    
+    private const string VersionKey = "gk:custs:version";
 
     private sealed record PagedDto(List<Customer> Items, int TotalCount);
 
     public CachingCustomerRepository(
-        ICustomerRepository inner, 
-        IDistributedCache cache, 
+        ICustomerRepository inner,
+        IDistributedCache cache,
         ILogger<CachingCustomerRepository> logger)
-    { _inner = inner; 
-      _cache = cache; 
-      _logger = logger; 
+    {
+        _inner = inner;
+        _cache = cache;
+        _logger = logger;
     }
 
     public async Task<Customer?> GetByIdAsync(Guid id, CancellationToken ct = default)
@@ -50,7 +53,7 @@ public sealed class CachingCustomerRepository : ICustomerRepository
     public async Task<Customer> AddAsync(Customer entity, CancellationToken ct = default)
     {
         var r = await _inner.AddAsync(entity, ct);
-        await SafeRemove(KeyAll(), ct);
+        await InvalidateAllCollectionKeysAsync(ct);
         return r;
     }
 
@@ -58,7 +61,7 @@ public sealed class CachingCustomerRepository : ICustomerRepository
     {
         var r = await _inner.UpdateAsync(entity, ct);
         await SafeRemove(KeyById(entity.Id), ct);
-        await SafeRemove(KeyAll(), ct);
+        await InvalidateAllCollectionKeysAsync(ct);
         return r;
     }
 
@@ -66,7 +69,7 @@ public sealed class CachingCustomerRepository : ICustomerRepository
     {
         var r = await _inner.DeleteAsync(id, ct);
         await SafeRemove(KeyById(id), ct);
-        await SafeRemove(KeyAll(), ct);
+        await InvalidateAllCollectionKeysAsync(ct);
         return r;
     }
 
@@ -76,15 +79,28 @@ public sealed class CachingCustomerRepository : ICustomerRepository
     public async Task<(IEnumerable<Customer> Items, int TotalCount)> GetPagedAsync(
         string? f, int page, int size, CancellationToken ct = default)
     {
-        var raw = await SafeGet(KeyPaged(f, page, size), ct);
-        if (raw is not null)
+        var version = await SafeGet(VersionKey, ct);
+        if (version is not null)
         {
-            var dto = JsonSerializer.Deserialize<PagedDto>(raw, Opts);
-            if (dto is not null) return (dto.Items, dto.TotalCount);
+            var raw = await SafeGet(KeyPaged(f, page, size), ct);
+            if (raw is not null)
+            {
+                var dto = JsonSerializer.Deserialize<PagedDto>(raw, Opts);
+                if (dto is not null)
+                {
+                    _logger.LogDebug("Cache HIT: {Key}", KeyPaged(f, page, size));
+                    return (dto.Items, dto.TotalCount);
+                }
+            }
         }
+
         var (items, total) = await _inner.GetPagedAsync(f, page, size, ct);
         var itemList = items.ToList();
+
+        await SafeSet(VersionKey, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ct);
         await SafeSet(KeyPaged(f, page, size), new PagedDto(itemList, total), ct);
+
+        _logger.LogDebug("Cache SET: {Key} ({Total} items)", KeyPaged(f, page, size), total);
         return (itemList, total);
     }
 
@@ -93,7 +109,7 @@ public sealed class CachingCustomerRepository : ICustomerRepository
 
     private async Task<string?> SafeGet(string key, CancellationToken ct)
     {
-        try   { return await _cache.GetStringAsync(key, ct); }
+        try { return await _cache.GetStringAsync(key, ct); }
         catch (Exception ex) { _logger.LogWarning(ex, "Cache GET failed {Key}", key); return null; }
     }
 
@@ -109,7 +125,13 @@ public sealed class CachingCustomerRepository : ICustomerRepository
 
     private async Task SafeRemove(string key, CancellationToken ct)
     {
-        try   { await _cache.RemoveAsync(key, ct); }
+        try { await _cache.RemoveAsync(key, ct); }
         catch (Exception ex) { _logger.LogWarning(ex, "Cache REMOVE failed {Key}", key); }
+    }
+
+    private async Task InvalidateAllCollectionKeysAsync(CancellationToken ct)
+    {
+        await SafeRemove(KeyAll(), ct);
+        await SafeRemove(VersionKey, ct);
     }
 }
